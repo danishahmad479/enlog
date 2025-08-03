@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Product List</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1200px;
+      margin: 0 auto 20px auto;
+    }
+
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .product-card {
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+      transition: transform 0.2s;
+    }
+
+    .product-card:hover {
+      transform: scale(1.02);
+    }
+
+    .product-name {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    .product-info {
+      font-size: 14px;
+      color: #555;
+      line-height: 1.6;
+    }
+
+    .pagination {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
+    .pagination button {
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+
+    .pagination button.active {
+      background-color: #1e40af;
+      font-weight: bold;
+    }
+
+    .pagination button:disabled {
+      background-color: #94a3b8;
+      cursor: not-allowed;
+    }
+
+    .cart-wrapper {
+      position: relative;
+      cursor: pointer;
+      font-size: 24px;
+    }
+
+    .cart-wrapper span {
+      position: absolute;
+      top: -10px;
+      right: -10px;
+      background: red;
+      color: white;
+      font-size: 12px;
+      padding: 2px 6px;
+      border-radius: 50%;
+    }
+  </style>
+</head>
+
+<body>
+
+
+<div class="top-bar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 16px;">
+  <!-- Left side: Title -->
+  <h2 style="margin: 0;">Available Products</h2>
+
+  <!-- Right side: Cart, Profile, Logout -->
+ <div style="display: flex; align-items: center; gap: 16px;">
+  <div class="relative" style="cursor: pointer; font-size: 24px;" onclick="clearNotificationDot()">
+    🔔
+    <span id="notification-dot" style="display: none; position: absolute; top: -6px; right: -6px; width: 10px; height: 10px; background: red; border-radius: 50%;"></span>
+  </div>
+
+  <!-- Toast container -->
+  <div id="toast" style="
+    display: none;
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: #2563eb;
+    color: white;
+    padding: 12px 16px;
+    border-radius: 6px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    z-index: 1000;
+    font-size: 14px;
+  "></div>
+</div>
+
+    <div class="cart-wrapper" onclick="goToCart()" style="cursor: pointer; font-size: 24px;">
+      🛒
+    </div>
+    <div onclick="goToOrders()" style="cursor: pointer; font-size: 24px;">📦</div>
+    <div onclick="goToProfile()" style="cursor: pointer; font-size: 24px;">👤</div>
+    <div onclick="logout()" style="cursor: pointer; font-size: 24px;">🚪</div>
+  </div>
+</div>
+
+<!-- Filter bar -->
+<div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; margin-left: 80px;">
+<select id="categoryFilter" style="padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+  <option value="">All Categories</option>
+</select>
+
+<input type="number" id="minPrice" placeholder="Min Price" style="padding: 6px; border: 1px solid #ccc; border-radius: 4px;" />
+<input type="number" id="maxPrice" placeholder="Max Price" style="padding: 6px; border: 1px solid #ccc; border-radius: 4px;" />
+
+  <button onclick="applyFilters()" style="padding: 6px 12px; background-color: #2563eb; color: white; border: none; border-radius: 5px;">Filter</button>
+</div>
+
+<!-- Product list & pagination -->
+<div class="grid-container" id="product-list">Loading...</div>
+<div class="pagination" id="pagination-container"></div>
+
+  <script>
+    const token = localStorage.getItem("accessToken");
+    const refreshToken = localStorage.getItem("refreshToken");
+
+    if (!token) {
+      window.location.href = "/login-page/";
+    }
+
+    function goToCart() {
+      window.location.href = "/cart-page/";
+    }
+
+    function goToProfile() {
+      window.location.href = "/profile-page/";
+    }
+
+    function goToOrders() {
+  window.location.href = "/my-orders-page/";
+}
+
+
+function updateCartCount() {
+  fetch("http://127.0.0.1:8000/cart/", {
+    headers: {
+      Authorization: "Bearer " + token
+    }
+  })
+    .then(res => res.json())
+    .then(data => {
+      const cartCountEl = document.getElementById("cart-count");
+      if (cartCountEl) {
+        cartCountEl.innerText = data.length || 0;
+      }
+    })
+    .catch(() => {
+      const cartCountEl = document.getElementById("cart-count");
+      if (cartCountEl) {
+        cartCountEl.innerText = "0";
+      }
+    });
+}
+    let currentPage = 1;
+    const pageSize = 10;
+
+    function fetchProducts(page = 1,filters = {}) {
+      currentPage = page;
+      let url = `http://127.0.0.1:8000/products/?page=${page}`;
+
+
+      if (filters.category) url += `&category=${filters.category}`;
+      if (filters.min_price) url += `&min_price=${filters.min_price}`;
+      if (filters.max_price) url += `&max_price=${filters.max_price}`;
+
+
+      fetch(url, {
+        headers: {
+          Authorization: "Bearer " + token
+        }
+      })
+        .then(response => {
+          if (response.status === 401) {
+            logout();
+            return;
+          }
+          return response.json();
+        })
+        .then(data => {
+          const list = document.getElementById("product-list");
+          list.innerHTML = "";
+
+          const products = data.results || data;
+
+          if (!products.length) {
+            list.innerHTML = "<p>No products found.</p>";
+            return;
+          }
+
+          products.forEach(product => {
+            const card = document.createElement("div");
+            card.className = "product-card";
+            card.innerHTML = `
+              <a href="/product/${product.id}/" style="text-decoration: none; color: inherit;">
+                <div class="product-name">${product.name}</div>
+                <div class="product-info">
+                  Category: ${product.category}<br>
+                  Price: ₹${product.price}<br>
+                  Stock: ${product.stock}
+                </div>
+              </a>
+            `;
+            list.appendChild(card);
+          });
+
+          const totalPages = Math.ceil(data.count / pageSize);
+          renderPagination(totalPages);
+        })
+        .catch(error => {
+          document.getElementById("product-list").innerHTML = "Failed to load products.";
+          console.error("Fetch error:", error);
+        });
+    }
+
+    function applyFilters() {
+      const category = document.getElementById("categoryFilter").value;
+      const min_price = document.getElementById("minPrice").value;
+      const max_price = document.getElementById("maxPrice").value;
+
+      fetchProducts(1, { category, min_price, max_price });
+    }
+
+
+    function renderPagination(totalPages) {
+      const container = document.getElementById("pagination-container");
+      container.innerHTML = "";
+
+      for (let i = 1; i <= totalPages; i++) {
+        const button = document.createElement("button");
+        button.innerText = i;
+        if (i === currentPage) {
+          button.classList.add("active");
+        }
+        button.onclick = () => fetchProducts(i);
+        container.appendChild(button);
+      }
+    }
+
+    function logout() {
+      if (refreshToken) {
+        fetch("http://127.0.0.1:8000/logout/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token,
+          },
+          body: JSON.stringify({ refresh: refreshToken }),
+        }).finally(() => {
+          localStorage.removeItem("accessToken");
+          localStorage.removeItem("refreshToken");
+          window.location.href = "/login-page/";
+        });
+      } else {
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("refreshToken");
+        window.location.href = "/login-page/";
+      }
+    }
+
+ function loadCategories() {
+  fetch("http://127.0.0.1:8000/categories/", {
+    headers: {
+      Authorization: "Bearer " + token
+    }
+  })
+    .then(res => res.json())
+    .then(data => {
+      console.log(data);
+      const select = document.getElementById("categoryFilter");
+      if (select && Array.isArray(data.results)) {
+        data.results.forEach(cat => {
+          const option = document.createElement("option");
+          option.value = cat.id;
+          option.textContent = cat.name;
+          select.appendChild(option);
+        });
+      }
+    })
+    .catch(err => console.error("Failed to load categories:", err));
+}
+
+
+
+    // Initial load
+    fetchProducts();
+    updateCartCount();
+    loadCategories();
+  </script>
+
+  <script>
+    const userId = localStorage.getItem("user_id");
+    console.log("User ID from localStorage:", userId);
+
+          // WebSocket connection for notifications
+      if (userId) {
+        const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+        const socket = new WebSocket(`${wsScheme}://${window.location.host}/ws/orders/${userId}/`);
+
+        socket.onmessage = function (e) {
+          const data = JSON.parse(e.data);
+          const dot = document.getElementById("notification-dot");
+          if (dot) dot.style.display = "block";
+
+          showToast(data.message);  // 👈 Use toast instead of alert
+        };
+
+        socket.onclose = function (e) {
+          console.error("WebSocket closed unexpectedly");
+        };
+      }
+
+      // Toast function
+      function showToast(message) {
+        const toast = document.getElementById("toast");
+        if (!toast) return;
+
+        toast.textContent = message;
+        toast.style.display = "block";
+
+        setTimeout(() => {
+          toast.style.display = "none";
+        }, 4000);
+      }
+
+      function clearNotificationDot() {
+        const dot = document.getElementById("notification-dot");
+        if (dot) dot.style.display = "none";
+      }
+</script>
+
+</body>
+
+</html>

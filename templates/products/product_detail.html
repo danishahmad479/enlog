@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Product Detail</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-4">
+
+  <!-- Header -->
+<!-- Product Card -->
+<div class="bg-white p-6 rounded shadow-md max-w-lg mx-auto mt-8">
+
+  <!-- Top Row: Back & Cart -->
+  <div class="flex justify-between items-center mb-4">
+    <button onclick="goBack()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm">⬅ Back</button>
+  </div>
+
+  <!-- Product Info -->
+  <h2 id="product-name" class="text-2xl font-bold mb-4"></h2>
+  <p id="product-category" class="text-gray-600 mb-2"></p>
+  <p id="product-price" class="text-gray-600 mb-2"></p>
+  <p id="product-stock" class="text-gray-600 mb-4"></p>
+
+  <label for="quantity" class="block mb-2 font-medium">Quantity:</label>
+  <input type="number" id="quantity" min="1" value="1" class="w-full p-2 border rounded mb-4" />
+
+  <button onclick="addToCart()" class="w-full bg-green-600 text-white py-2 rounded">Add to Cart</button>
+  <p id="error-message" class="text-red-500 mt-4"></p>
+  <p id="success-message" class="text-green-500 mt-4"></p>
+</div>
+
+<script>
+  const pathParts = window.location.pathname.split("/").filter(Boolean);
+  const productId = pathParts[pathParts.length - 1];
+  const token = localStorage.getItem("accessToken");
+
+  const headers = {
+    "Authorization": "Bearer " + token,
+    "Content-Type": "application/json"
+  };
+
+  let productData = null;
+
+  // Fetch product details and populate UI
+  fetch(`http://127.0.0.1:8000/products/${productId}/`, { headers })
+    .then(res => {
+      if (!res.ok) throw new Error("Failed to fetch product");
+      return res.json();
+    })
+    .then(data => {
+      productData = data;
+      document.getElementById("product-name").innerText = data.name;
+      document.getElementById("product-category").innerText = "Category: " + data.category;
+      document.getElementById("product-price").innerText = "Price: ₹" + data.price;
+      document.getElementById("product-stock").innerText = "Stock: " + data.stock;
+
+        if (data.stock === 0) {
+    document.getElementById("error-message").innerText = "Out of stock";
+    document.querySelector("button").disabled = true;
+  }
+    })
+    .catch(err => {
+      console.error("Fetch error:", err);
+      document.getElementById("error-message").innerText = "Failed to load product.";
+    });
+
+
+  function addToCart() {
+    const quantity = parseInt(document.getElementById("quantity").value);
+    if (!productData || quantity <= 0) {
+      document.getElementById("error-message").innerText = "Invalid quantity or product";
+      return;
+    }
+
+
+  if (quantity > productData.stock) {
+    document.getElementById("error-message").innerText = "Not enough stock available.";
+    document.getElementById("success-message").innerText = "";
+    return;
+  }
+
+  const cartItemData = {
+    product: productData.id,
+    price: productData.price,
+    quantity: quantity,
+    total_price: (parseFloat(productData.price) * quantity).toFixed(2),
+    product_name: productData.name,
+  };
+
+  // First: Check if item already exists in cart
+  fetch("http://127.0.0.1:8000/cart/", {
+    method: "GET",
+    headers: headers,
+  })
+    .then(res => res.json())
+    .then(data => {
+      const existingItem = data.results.find(item => item.product === productData.id);
+      const newQuantity = existingItem ? existingItem.quantity + quantity : quantity;
+
+      if (newQuantity > productData.stock) {
+        document.getElementById("error-message").innerText = "Not enough stock available.";
+        document.getElementById("success-message").innerText = "";
+        return Promise.reject(); // prevent further requests
+      }
+
+      if (existingItem) {
+        // If exists, send PUT request to update quantity and total_price
+
+        const updatedCartItem = {
+          ...cartItemData,
+          quantity: newQuantity,
+          total_price: (newQuantity * productData.price).toFixed(2),
+        };
+
+        return fetch(`http://127.0.0.1:8000/cart/${existingItem.id}/`, {
+          method: "PUT",
+          headers: headers,
+          body: JSON.stringify(updatedCartItem)
+        });
+      } else {
+        // If not exists, send POST to add new cart item
+        return fetch("http://127.0.0.1:8000/cart/", {
+          method: "POST",
+          headers: headers,
+          body: JSON.stringify(cartItemData)
+        });
+      }
+    })
+    .then(res => {
+      if (!res.ok) {
+        return res.json().then(err => { throw err; });
+      }
+      return res.json();
+    })
+    .then(data => {
+      document.getElementById("success-message").innerText = "Prodcut added to Cart successfully!";
+      document.getElementById("error-message").innerText = "";
+
+      // Hide success message after 3 seconds
+      setTimeout(() => {
+        document.getElementById("success-message").innerText = "";
+      }, 3000);
+    })
+    .catch(err => {
+      console.error("Cart Error:", err);
+      document.getElementById("error-message").innerText = "Failed to update cart.";
+      document.getElementById("success-message").innerText = "";
+
+      // Hide error message after 3 seconds
+      setTimeout(() => {
+        document.getElementById("error-message").innerText = "";
+      }, 3000);
+    });
+
+}
+
+
+  function goBack() {
+    window.location.href = "/";
+  }
+</script>
+
+
+
+
+
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Your Profile</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6">
+  <div class="max-w-xl mx-auto bg-white p-6 rounded shadow">
+    <h2 class="text-2xl font-bold mb-4">Edit Profile</h2>
+
+    <form id="profile-form" class="space-y-4">
+      <div>
+        <label class="block">Name</label>
+        <input type="text" id="username" class="w-full border p-2 rounded" disabled>
+      </div>
+      <div>
+        <label class="block">Email</label>
+        <input type="email" id="email" class="w-full border p-2 rounded" disabled>
+      </div>
+      <div>
+        <label class="block">Phone</label>
+        <input type="text" id="phone" class="w-full border p-2 rounded">
+      </div>
+      <div>
+        <label class="block">Address</label>
+        <textarea id="address" class="w-full border p-2 rounded"></textarea>
+      </div>
+      <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded">Update</button>
+      <button onclick="goBack()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm">⬅ Back</button>
+      <p id="status-msg" class="mt-2 text-green-600"></p>
+    </form>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('accessToken'); // or wherever you're storing JWT
+
+    async function fetchUserProfile() {
+      const res = await fetch('/user-profile/', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+
+      document.getElementById('username').value = data.username;
+      document.getElementById('email').value = data.email;
+      document.getElementById('phone').value = data.phone || '';
+      document.getElementById('address').value = data.address || '';
+    }
+
+    document.getElementById('profile-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const phone = document.getElementById('phone').value;
+      const address = document.getElementById('address').value;
+
+      const res = await fetch('/user-profile/', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ phone, address })
+      });
+
+      const msg = document.getElementById('status-msg');
+      if (res.ok) {
+        msg.textContent = "Profile updated successfully!";
+        msg.classList.remove("text-red-600");
+        msg.classList.add("text-green-600");
+      } else {
+        msg.textContent = "Error updating profile.";
+        msg.classList.remove("text-green-600");
+        msg.classList.add("text-red-600");
+      }
+
+      setTimeout(() => {
+    msg.textContent = "";
+    }, 2000); // Clear message after 3 seconds
+
+      // Optionally, refresh the profile data
+      fetchUserProfile();
+    });
+
+    fetchUserProfile();
+
+      function goBack() {
+    window.location.href = "/";
+  }
+  </script>
+</body>
+</html>

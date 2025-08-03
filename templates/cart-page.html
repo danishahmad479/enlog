@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Your Cart</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+  <div class="max-w-3xl mx-auto bg-white p-6 rounded shadow">
+
+    <h1 class="text-2xl font-bold mb-6">🛒 Your Cart</h1>
+
+      <div class="flex justify-between items-center mb-4">
+    <button onclick="goBack()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm">⬅ Back</button>
+  </div>
+
+    <div id="cart-items" class="space-y-4"></div>
+
+    <div class="mt-6 text-right">
+      <p id="total-amount" class="text-xl font-semibold mb-4">Total: ₹0</p>
+      <button
+  onclick="buyNow(this)"
+  data-id="{{ product.id }}"
+  data-name="{{ product.name }}"
+  data-price="{{ product.price }}"
+  class="bg-green-600 text-white px-4 py-2 rounded"
+>
+  Buy Now
+</button>
+      <p id="buy-success" class="text-green-600 mt-2"></p>
+    </div>
+
+    <p id="error-message" class="text-red-500 mt-4"></p>
+  </div>
+
+<script>
+  const token = localStorage.getItem("accessToken");
+
+  fetch("http://127.0.0.1:8000/cart/", {
+    headers: {
+      Authorization: "Bearer " + token,
+    },
+  })
+  .then(res => res.json())
+  .then(data => {
+    console.log("Cart Data:", data);  // ✅ Log API response
+
+    const items = data.results || [];  // ✅ Handle paginated results
+    const container = document.getElementById("cart-items");
+    const totalEl = document.getElementById("total-amount");
+    let total = 0;
+
+    if (items.length === 0) {
+      container.innerHTML = "<p>Your cart is empty.</p>";
+      return;
+    }
+
+    items.forEach(item => {
+      total += parseFloat(item.total_price);
+      const div = document.createElement("div");
+      div.className = "border-b pb-2 mb-2";
+      div.innerHTML = `
+        <h2 class="text-lg font-semibold">${item.product_name}</h2>
+        <p>Price: ₹${item.price}</p>
+        <p>Quantity: ${item.quantity}</p>
+        <p>Total: ₹${item.total_price}</p>
+        <button onclick="removeFromCart(${item.id})" class="bg-red-500 text-white px-3 py-1 mt-2 rounded text-sm">🗑 Remove</button>
+      `;
+      container.appendChild(div);
+    });
+
+    totalEl.innerText = `Total: ₹${total.toFixed(2)}`;
+  })
+  .catch(err => {
+    console.error("Fetch cart failed", err);
+    document.getElementById("error-message").innerText = "Failed to load cart.";
+  });
+
+    function goBack() {
+    window.location.href = "/";
+  }
+</script>
+
+
+<script>
+
+ function buyNow() {
+  const token = localStorage.getItem("accessToken");
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: "Bearer " + token,
+  };
+
+  fetch("http://127.0.0.1:8000/place-order/", {
+    method: "POST",
+    headers: headers,
+  })
+    .then(res => {
+      if (!res.ok) return res.json().then(err => { throw err; });
+      return res.json();
+    })
+    .then(data => {
+      document.getElementById("buy-success").innerText = data.message;
+      // Optionally: Reload cart to show empty
+      setTimeout(() => window.location.reload(), 1500);
+    })
+    .catch(err => {
+      console.error("Order error:", err);
+      document.getElementById("buy-success").innerText = err.detail || "❌ Failed to place order.";
+    });
+}
+
+</script>
+<script>
+  function removeFromCart(cartItemId) {
+    const token = localStorage.getItem("accessToken");
+
+    fetch(`http://127.0.0.1:8000/cart/${cartItemId}/`, {
+      method: "DELETE",
+      headers: {
+        Authorization: "Bearer " + token,
+      },
+    })
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to remove item.");
+        // Refresh the page or re-fetch cart items
+        window.location.reload();
+      })
+      .catch(err => {
+        console.error("Remove failed:", err);
+        alert("❌ Could not remove item from cart.");
+      });
+  }
+</script>
+
+</body>
+</html>

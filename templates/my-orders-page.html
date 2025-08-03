@@ -1,0 +1,72 @@
+<!-- templates/my-orders-page.html -->
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>My Orders</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6">
+  <h1 class="text-2xl font-bold mb-6">My Orders</h1>
+        <div class="flex justify-between items-center mb-4">
+    <button onclick="goBack()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm">⬅ Back</button>
+  </div>
+  <div id="orders-container" class="space-y-6"></div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        fetch('/my-orders/', {
+            method: 'GET',
+            headers: {
+                'Authorization': 'Bearer ' + localStorage.getItem('accessToken'), // or use cookies/session if applicable
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Authentication required or failed');
+            }
+            return response.json();
+        })
+        .then(orders => {
+            const container = document.getElementById('orders-container');
+            if (orders.length === 0) {
+                container.innerHTML = "<p>No orders found.</p>";
+                return;
+            }
+
+            orders.forEach(order => {
+
+                const productNames = order.items.map(item => item.product.name).join(', ');
+
+
+                const itemsHtml = order.items.map(item => `
+                    <li>${item.product.name} - Qty: ${item.quantity} - ₹${item.price}</li>
+                `).join('');
+
+
+                const orderHtml = `
+                    <div class="border p-4 rounded bg-white shadow">
+                        <h2 class="text-lg font-semibold">Order ${order.id} - Products: ${productNames}</h2>
+                        <p>Status: <strong>${order.status}</strong></p>
+                        <p>Total: ₹${order.total_amount}</p>
+                        <p>Placed on: ${new Date(order.created_at).toLocaleString()}</p>
+                        <ul class="ml-4 list-disc mt-2">${itemsHtml}</ul>
+                    </div>
+                `;
+
+                container.innerHTML += orderHtml;
+            });
+        })
+        .catch(error => {
+            document.getElementById('orders-container').innerHTML = `<p class="text-red-600">${error.message}</p>`;
+        });
+    });
+
+        function goBack() {
+    window.location.href = "/";
+  }
+  </script>
+</body>
+</html>

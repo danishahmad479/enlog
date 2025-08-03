@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+
+  <div class="bg-white p-8 rounded shadow-md w-full max-w-md">
+    <h2 class="text-2xl font-semibold mb-6 text-center text-gray-800">Login</h2>
+
+    <!-- Message Box -->
+    <div id="messageBox" class="mb-4 hidden p-3 rounded text-sm"></div>
+
+    <form id="loginForm" onsubmit="loginUser(event)" class="space-y-4">
+      <div>
+        <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
+        <input type="text" id="username" class="mt-1 w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+      </div>
+
+      <div>
+        <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
+        <input type="password" id="password" class="mt-1 w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+      </div>
+
+      <button type="submit" class="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700">Login</button>
+    </form>
+      <p class="mt-4 text-center text-sm text-gray-600">
+      Don't have an account?
+      <a href="/register-page/" class="text-blue-600 hover:underline">Register here</a>
+    </p>
+  </div>
+
+  <script>
+    async function loginUser(event) {
+      event.preventDefault();
+
+      const username = document.getElementById("username").value;
+      const password = document.getElementById("password").value;
+      const messageBox = document.getElementById("messageBox");
+
+      const response = await fetch("http://127.0.0.1:8000/login/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: username,
+          password: password,
+        }),
+      });
+
+      const data = await response.json();
+
+      // Reset styles
+      messageBox.classList.remove("hidden", "bg-green-100", "text-green-700", "bg-red-100", "text-red-700");
+
+      if (response.ok) {
+        messageBox.classList.add("bg-green-100", "text-green-700");
+        messageBox.textContent = data.message || "Login successful!";
+
+        localStorage.setItem("accessToken", data.access);
+        localStorage.setItem("refreshToken", data.refresh);
+        localStorage.setItem("username", username);
+        localStorage.setItem("is_staff", data.is_staff ? "true" : "false");
+        localStorage.setItem("user_id", data.user_id);
+        console.log("Login successful:", data.user_id);
+
+        
+
+        if (data.is_staff) {
+            // Redirect admin to category management
+            window.location.href = "http://127.0.0.1:8000/categories-page/";
+        } else {
+            // Redirect normal user to product page
+            window.location.href = "http://127.0.0.1:8000/";
+        }
+      } else {
+        messageBox.classList.add("bg-red-100", "text-red-700");
+        messageBox.textContent = data.message || "Login failed.";
+        console.error("Login error:", data);
+      }
+    }
+  </script>
+
+</body>
+</html>
