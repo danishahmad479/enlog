@@ -71,32 +71,42 @@ class Order(models.Model):
 
     def save(self, *args, **kwargs):
         is_status_changed = False
+        previous_status = None
 
         if self.pk:
-            previous = Order.objects.get(pk=self.pk)
-            allowed_transitions = {
-                'pending': ['shipped', 'delivered'],
-                'shipped': ['delivered'],
-                'delivered': [],
-            }
+            try:
+                previous = Order.objects.get(pk=self.pk)
+                previous_status = previous.status
+                allowed_transitions = {
+                    'pending': ['shipped', 'delivered'],
+                    'shipped': ['delivered'],
+                    'delivered': [],
+                }
 
-            if self.status != previous.status:
-                is_status_changed = True
-                if self.status not in allowed_transitions[previous.status]:
-                    raise ValueError(f"Invalid status transition from {previous.status} to {self.status}")
+                if self.status != previous_status:
+                    is_status_changed = True
+                    if self.status not in allowed_transitions[previous_status]:
+                        raise ValueError(f"Invalid status transition from {previous_status} to {self.status}")
+            except Order.DoesNotExist:
+                pass
 
         super().save(*args, **kwargs)
 
-        if is_status_changed:
-            channel_layer = get_channel_layer()
-            if channel_layer:
-                async_to_sync(channel_layer.group_send)(
-                    f"user_{self.user.id}",
-                    {
-                        "type": "send_notification",
-                        "message": f"Your order #{self.id} status changed to {self.status.capitalize()}."
-                    }
-                )
+        # Send notification if status changed
+        if is_status_changed and previous_status:
+            try:
+                channel_layer = get_channel_layer()
+                if channel_layer:
+                    async_to_sync(channel_layer.group_send)(
+                        f"user_{self.user.id}",
+                        {
+                            "type": "send_notification",
+                            "message": f"Your order #{self.id} status changed from {previous_status.capitalize()} to {self.status.capitalize()}."
+                        }
+                    )
+                    print(f"Notification sent to user {self.user.id} for order {self.id}")
+            except Exception as e:
+                print(f"Failed to send notification: {e}")
 
     class Meta:
         ordering = ['-created_at']

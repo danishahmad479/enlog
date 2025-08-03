@@ -8,6 +8,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 p-6">
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
   <h1 class="text-2xl font-bold mb-6">My Orders</h1>
         <div class="flex justify-between items-center mb-4">
     <button onclick="goBack()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm">⬅ Back</button>
@@ -15,6 +18,94 @@
   <div id="orders-container" class="space-y-6"></div>
 
   <script>
+    // Global toast notification system
+    function showToast(message, type = 'info') {
+      const toastContainer = document.getElementById('toast-container');
+      if (!toastContainer) return;
+
+      const toast = document.createElement('div');
+      toast.className = `p-4 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full`;
+      
+      // Set colors based on type
+      switch(type) {
+        case 'success':
+          toast.className += ' bg-green-500 text-white';
+          break;
+        case 'error':
+          toast.className += ' bg-red-500 text-white';
+          break;
+        case 'warning':
+          toast.className += ' bg-yellow-500 text-white';
+          break;
+        default:
+          toast.className += ' bg-blue-500 text-white';
+      }
+      
+      toast.innerHTML = `
+        <div class="flex items-center justify-between">
+          <span>${message}</span>
+          <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-white hover:text-gray-200">
+            ✕
+          </button>
+        </div>
+      `;
+      
+      toastContainer.appendChild(toast);
+      
+      // Animate in
+      setTimeout(() => {
+        toast.classList.remove('translate-x-full');
+      }, 100);
+      
+      // Auto remove after 5 seconds
+      setTimeout(() => {
+        toast.classList.add('translate-x-full');
+        setTimeout(() => {
+          if (toast.parentElement) {
+            toast.remove();
+          }
+        }, 300);
+      }, 5000);
+    }
+
+    // WebSocket notification system
+    function initializeWebSocket() {
+      const userId = localStorage.getItem("user_id");
+      if (!userId) return;
+
+      const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+      const socket = new WebSocket(`${wsScheme}://${window.location.host}/ws/orders/${userId}/`);
+
+      socket.onopen = function (e) {
+        console.log("WebSocket connection established on orders page");
+      };
+
+      socket.onmessage = function (e) {
+        try {
+          const data = JSON.parse(e.data);
+          console.log("Received notification on orders page:", data);
+          
+          if (data.type === 'notification') {
+            showToast(data.message, 'success');
+            // Refresh the page to show updated order status
+            setTimeout(() => {
+              window.location.reload();
+            }, 2000);
+          }
+        } catch (error) {
+          console.error("Error parsing WebSocket message:", error);
+        }
+      };
+
+      socket.onclose = function (e) {
+        console.log("WebSocket connection closed on orders page");
+      };
+
+      socket.onerror = function (e) {
+        console.error("WebSocket error on orders page:", e);
+      };
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         fetch('/my-orders/', {
             method: 'GET',
@@ -64,9 +155,12 @@
         });
     });
 
-        function goBack() {
-    window.location.href = "/";
-  }
+    function goBack() {
+      window.location.href = "/";
+    }
+
+    // Initialize WebSocket when page loads
+    document.addEventListener('DOMContentLoaded', initializeWebSocket);
   </script>
 </body>
 </html>

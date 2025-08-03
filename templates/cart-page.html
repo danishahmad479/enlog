@@ -6,6 +6,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen p-6">
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
   <div class="max-w-3xl mx-auto bg-white p-6 rounded shadow">
 
     <h1 class="text-2xl font-bold mb-6">🛒 Your Cart</h1>
@@ -35,6 +38,90 @@
 
 <script>
   const token = localStorage.getItem("accessToken");
+
+  // Global toast notification system
+  function showToast(message, type = 'info') {
+    const toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) return;
+
+    const toast = document.createElement('div');
+    toast.className = `p-4 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full`;
+    
+    // Set colors based on type
+    switch(type) {
+      case 'success':
+        toast.className += ' bg-green-500 text-white';
+        break;
+      case 'error':
+        toast.className += ' bg-red-500 text-white';
+        break;
+      case 'warning':
+        toast.className += ' bg-yellow-500 text-white';
+        break;
+      default:
+        toast.className += ' bg-blue-500 text-white';
+    }
+    
+    toast.innerHTML = `
+      <div class="flex items-center justify-between">
+        <span>${message}</span>
+        <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-white hover:text-gray-200">
+          ✕
+        </button>
+      </div>
+    `;
+    
+    toastContainer.appendChild(toast);
+    
+    // Animate in
+    setTimeout(() => {
+      toast.classList.remove('translate-x-full');
+    }, 100);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+      toast.classList.add('translate-x-full');
+      setTimeout(() => {
+        if (toast.parentElement) {
+          toast.remove();
+        }
+      }, 300);
+    }, 5000);
+  }
+
+  // WebSocket notification system
+  function initializeWebSocket() {
+    const userId = localStorage.getItem("user_id");
+    if (!userId) return;
+
+    const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+    const socket = new WebSocket(`${wsScheme}://${window.location.host}/ws/orders/${userId}/`);
+
+    socket.onopen = function (e) {
+      console.log("WebSocket connection established on cart page");
+    };
+
+    socket.onmessage = function (e) {
+      try {
+        const data = JSON.parse(e.data);
+        console.log("Received notification on cart page:", data);
+        
+        if (data.type === 'notification') {
+          showToast(data.message, 'success');
+        }
+      } catch (error) {
+        console.error("Error parsing WebSocket message:", error);
+      }
+    };
+
+    socket.onclose = function (e) {
+      console.log("WebSocket connection closed on cart page");
+    };
+
+    socket.onerror = function (e) {
+      console.error("WebSocket error on cart page:", e);
+    };
+  }
 
   fetch("http://127.0.0.1:8000/cart/", {
     headers: {
@@ -77,61 +164,64 @@
   });
 
     function goBack() {
-    window.location.href = "/";
-  }
-</script>
+      window.location.href = "/";
+    }
+  </script>
 
-
-<script>
-
- function buyNow() {
-  const token = localStorage.getItem("accessToken");
-  const headers = {
-    "Content-Type": "application/json",
-    Authorization: "Bearer " + token,
-  };
-
-  fetch("http://127.0.0.1:8000/place-order/", {
-    method: "POST",
-    headers: headers,
-  })
-    .then(res => {
-      if (!res.ok) return res.json().then(err => { throw err; });
-      return res.json();
-    })
-    .then(data => {
-      document.getElementById("buy-success").innerText = data.message;
-      // Optionally: Reload cart to show empty
-      setTimeout(() => window.location.reload(), 1500);
-    })
-    .catch(err => {
-      console.error("Order error:", err);
-      document.getElementById("buy-success").innerText = err.detail || "❌ Failed to place order.";
-    });
-}
-
-</script>
-<script>
-  function removeFromCart(cartItemId) {
-    const token = localStorage.getItem("accessToken");
-
-    fetch(`http://127.0.0.1:8000/cart/${cartItemId}/`, {
-      method: "DELETE",
-      headers: {
+  <script>
+    function buyNow() {
+      const token = localStorage.getItem("accessToken");
+      const headers = {
+        "Content-Type": "application/json",
         Authorization: "Bearer " + token,
-      },
-    })
-      .then(res => {
-        if (!res.ok) throw new Error("Failed to remove item.");
-        // Refresh the page or re-fetch cart items
-        window.location.reload();
+      };
+
+      fetch("http://127.0.0.1:8000/place-order/", {
+        method: "POST",
+        headers: headers,
       })
-      .catch(err => {
-        console.error("Remove failed:", err);
-        alert("❌ Could not remove item from cart.");
-      });
-  }
-</script>
+        .then(res => {
+          if (!res.ok) return res.json().then(err => { throw err; });
+          return res.json();
+        })
+        .then(data => {
+          document.getElementById("buy-success").innerText = data.message;
+          // Optionally: Reload cart to show empty
+          setTimeout(() => window.location.reload(), 1500);
+        })
+        .catch(err => {
+          console.error("Order error:", err);
+          document.getElementById("buy-success").innerText = err.detail || "❌ Failed to place order.";
+        });
+    }
+  </script>
+
+  <script>
+    function removeFromCart(cartItemId) {
+      const token = localStorage.getItem("accessToken");
+
+      fetch(`http://127.0.0.1:8000/cart/${cartItemId}/`, {
+        method: "DELETE",
+        headers: {
+          Authorization: "Bearer " + token,
+        },
+      })
+        .then(res => {
+          if (!res.ok) throw new Error("Failed to remove item.");
+          // Refresh the page or re-fetch cart items
+          window.location.reload();
+        })
+        .catch(err => {
+          console.error("Remove failed:", err);
+          alert("❌ Could not remove item from cart.");
+        });
+    }
+  </script>
+
+  <!-- Initialize WebSocket when page loads -->
+  <script>
+    document.addEventListener('DOMContentLoaded', initializeWebSocket);
+  </script>
 
 </body>
 </html>
