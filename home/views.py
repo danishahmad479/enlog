@@ -16,7 +16,9 @@ from django.db import transaction
 from rest_framework import filters
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.viewsets import ModelViewSet
-
+from .cache_utils import CacheManager
+from django.core.paginator import Paginator
+from django.http import JsonResponse
 
 
 class RegisterView(APIView):
@@ -130,7 +132,43 @@ class CategoryViewSet(ModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated, IsAdminOrReadOnly]
 
+    def list(self, request, *args, **kwargs):
+        """Get categories with caching"""
+        # Try to get from cache first
+        cached_categories = CacheManager.get_categories()
+        if cached_categories:
+            print("Serving categories from cache")
+            return Response(cached_categories)
+        
+        # If not in cache, get from database
+        categories = self.get_queryset()
+        serializer = self.get_serializer(categories, many=True)
+        data = serializer.data
+        
+        # Cache the result
+        CacheManager.set_categories(data)
+        
+        return Response(data)
 
+    def retrieve(self, request, *args, **kwargs):
+        """Get single category with caching"""
+        category_id = kwargs.get('pk')
+        
+        # Try to get from cache first
+        cached_category = CacheManager.get_category_detail(category_id)
+        if cached_category:
+            print(f"Serving category {category_id} from cache")
+            return Response(cached_category)
+        
+        # If not in cache, get from database
+        category = self.get_object()
+        serializer = self.get_serializer(category)
+        data = serializer.data
+        
+        # Cache the result
+        CacheManager.set_category_detail(category_id, data)
+        
+        return Response(data)
 
 class ReadOnlyOrAdmin(BasePermission):
     def has_permission(self, request, view):
@@ -164,6 +202,72 @@ class ProductViewSet(ModelViewSet):
             queryset = queryset.filter(price__lte=max_price)
 
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        """Get products with caching"""
+        # Build filters for cache key
+        filters = {}
+        if request.query_params.get('category'):
+            filters['category'] = request.query_params.get('category')
+        if request.query_params.get('min_price'):
+            filters['min_price'] = request.query_params.get('min_price')
+        if request.query_params.get('max_price'):
+            filters['max_price'] = request.query_params.get('max_price')
+        
+        # Try to get from cache first
+        cached_products = CacheManager.get_products(filters)
+        if cached_products:
+            print("Serving products from cache")
+            return Response(cached_products)
+        
+        # If not in cache, get from database
+        queryset = self.get_queryset()
+        
+        # Handle pagination
+        page = request.query_params.get('page', 1)
+        page_size = 10
+        paginator = Paginator(queryset, page_size)
+        
+        try:
+            products_page = paginator.page(page)
+        except:
+            products_page = paginator.page(1)
+        
+        serializer = self.get_serializer(products_page.object_list, many=True)
+        
+        # Prepare response data
+        data = {
+            'count': paginator.count,
+            'next': products_page.has_next(),
+            'previous': products_page.has_previous(),
+            'results': serializer.data
+        }
+        
+        # Cache the result (only for first page to avoid cache bloat)
+        if page == 1 or not page:
+            CacheManager.set_products(data, filters)
+        
+        return Response(data)
+
+    def retrieve(self, request, *args, **kwargs):
+        """Get single product with caching"""
+        product_id = kwargs.get('pk')
+        
+        # Try to get from cache first
+        cached_product = CacheManager.get_product_detail(product_id)
+        if cached_product:
+            print(f"Serving product {product_id} from cache")
+            return Response(cached_product)
+        
+        # If not in cache, get from database
+        product = self.get_object()
+        serializer = self.get_serializer(product)
+        data = serializer.data
+        
+        # Cache the result
+        CacheManager.set_product_detail(product_id, data)
+        
+        return Response(data)
     
 
 
